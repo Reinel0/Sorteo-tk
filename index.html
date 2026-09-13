@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sorteo TikTok - Final</title>
+
+<style>
+body {
+  margin: 0;
+  padding: 0;
+  background: #1a1a1a;
+  background-size: cover;
+  background-position: center;
+  font-family: Arial, sans-serif;
+  color: #fff;
+}
+
+.panel {
+  background: rgba(0,0,0,0.45);
+  padding: 15px;
+  margin: 12px;
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.panel-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 6px;
+  border: none;
+}
+
+button {
+  background: #4CAF50;
+  color: white;
+  font-weight: bold;
+}
+
+button:hover {
+  background: #45a049;
+}
+
+#drawName {
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 20px 0;
+  font-weight: bold;
+}
+
+#historyList {
+  list-style: none;
+  padding: 0;
+}
+
+#historyList li {
+  background: rgba(255,255,255,0.15);
+  padding: 8px;
+  margin-top: 5px;
+  border-radius: 5px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+  <div class="panel-title">Datos del sorteo</div>
+  <input id="raffleName" placeholder="Nombre del sorteo">
+  <input id="raffleItem" placeholder="Qué se está sorteando">
+  <div id="dateTimeInfo"></div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Fondo</div>
+  <input type="color" id="bgColorPicker" value="#1a1a1a">
+  <input type="file" id="bgLocalImage" accept="image/*">
+</div>
+
+<div class="panel">
+  <div class="panel-title">Participantes</div>
+  <input id="csvUrl" placeholder="Link CSV publicado">
+  <button id="btnLoadCsv">Cargar CSV</button>
+  <div id="csvStatus"></div>
+  <div>Válidos del mes: <span id="participantCount">0</span></div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Sorteo</div>
+  <div id="drawName">Listo para iniciar</div>
+  <button id="btnStart">Iniciar sorteo</button>
+  <button id="btnReset">Reiniciar</button>
+
+  <div class="panel-title">Ganadores</div>
+  <ul id="historyList"></ul>
+
+  <button id="btnCertificate">Certificado</button>
+</div>
+
+<script>
+let participants = [];
+let uniqueParticipants = [];
+let winners = [];
+let autoCSV = null;
+
+/* ============================
+   HORA EN TIEMPO REAL
+   ============================ */
+function actualizarHora() {
+  document.getElementById("dateTimeInfo").textContent =
+    "Fecha y hora: " + new Date().toLocaleString();
+}
+setInterval(actualizarHora, 1000);
+actualizarHora();
+
+/* ============================
+   FONDO LOCAL
+   ============================ */
+document.getElementById("bgLocalImage").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.body.style.backgroundImage = `url("${ev.target.result}")`;
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ============================
+   FONDO POR COLOR
+   ============================ */
+document.getElementById("bgColorPicker").addEventListener("input", e => {
+  document.body.style.background = e.target.value;
+});
+
+/* ============================
+   PARSER CSV ROBUSTO
+   ============================ */
+function parseCSV(text) {
+  const rows = [];
+  let current = "";
+  let row = [];
+  let insideQuotes = false;
+
+  for (let char of text) {
+    if (char === '"' && !insideQuotes) insideQuotes = true;
+    else if (char === '"' && insideQuotes) insideQuotes = false;
+    else if (char === ',' && !insideQuotes) {
+      row.push(current.trim());
+      current = "";
+    } else if (char === '\n') {
+      row.push(current.trim());
+      rows.push(row);
+      row = [];
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  if (current.length > 0) {
+    row.push(current.trim());
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+/* ============================
+   CARGAR CSV
+   ============================ */
+async function cargarCSV() {
+  const url = document.getElementById("csvUrl").value.trim();
+  if (!url) {
+    csvStatus.textContent = "Ingresa un link CSV.";
+    return;
+  }
+
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+
+    const rows = parseCSV(text);
+
+    participants = [];
+    const hoy = new Date();
+    const mes = hoy.getMonth();
+    const año = hoy.getFullYear();
+
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i];
+
+      const fecha = new Date(cols[0]);
+      const nombre = cols[1] || "";
+      const tiktok = cols[3] || "";
+
+      if (!nombre) continue;
+
+      if (fecha.getMonth() === mes && fecha.getFullYear() === año) {
+        participants.push(`${nombre} (@${tiktok})`);
+      }
+    }
+
+    uniqueParticipants = [...new Set(participants)];
+    participantCount.textContent = uniqueParticipants.length;
+    csvStatus.textContent = "CSV actualizado.";
+
+    return true;
+
+  } catch {
+    csvStatus.textContent = "Error al cargar CSV.";
+    return false;
+  }
+}
+
+/* ============================
+   AUTO-UPDATE CSV
+   ============================ */
+function activarAutoCSV() {
+  autoCSV = setInterval(async () => {
+    const ok = await cargarCSV();
+    if (!ok) detenerAutoCSV();
+  }, 10000);
+}
+
+function detenerAutoCSV() {
+  clearInterval(autoCSV);
+  autoCSV = null;
+}
+
+document.getElementById("btnLoadCsv").addEventListener("click", async () => {
+  const ok = await cargarCSV();
+  if (ok) activarAutoCSV();
+});
+
+/* ============================
+   SORTEO CON EXCLUSIÓN DE GANADORES
+   ============================ */
+document.getElementById("btnStart").addEventListener("click", () => {
+  detenerAutoCSV();
+
+  if (uniqueParticipants.length === 0) {
+    drawName.textContent = "No quedan participantes.";
+    return;
+  }
+
+  let index = 0;
+  const interval = setInterval(() => {
+    drawName.textContent = uniqueParticipants[index];
+    index = (index + 1) % uniqueParticipants.length;
+  }, 50);
+
+  setTimeout(() => {
+    clearInterval(interval);
+
+    const ganadorIndex = Math.floor(Math.random() * uniqueParticipants.length);
+    const ganador = uniqueParticipants[ganadorIndex];
+    drawName.textContent = ganador;
+
+    winners.push(ganador);
+    const li = document.createElement("li");
+    li.textContent = ganador;
+    historyList.appendChild(li);
+
+    uniqueParticipants.splice(ganadorIndex, 1);
+    participantCount.textContent = uniqueParticipants.length;
+
+  }, 3000);
+});
+
+/* ============================
+   REINICIAR
+   ============================ */
+document.getElementById("btnReset").addEventListener("click", () => {
+  winners = [];
+  historyList.innerHTML = "";
+  drawName.textContent = "Listo para iniciar";
+  activarAutoCSV();
+});
+
+/* ============================
+   CERTIFICADO
+   ============================ */
+document.getElementById("btnCertificate").addEventListener("click", () => {
+  const ganador = drawName.textContent;
+  if (!ganador || ganador === "Listo para iniciar") {
+    alert("No hay ganador aún.");
+    return;
+  }
+
+  const nombreSorteo = document.getElementById("raffleName").value || "Sorteo TikTok";
+  const premio = document.getElementById("raffleItem").value || "Premio";
+
+  alert(
+    "CERTIFICADO DE GANADOR\n\n" +
+    "Sorteo: " + nombreSorteo + "\n" +
+    "Premio: " + premio + "\n" +
+    "Ganador: " + ganador + "\n" +
+    "Fecha: " + new Date().toLocaleString()
+  );
+});
+</script>
+
+</body>
+</html>
