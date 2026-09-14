@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sorteo TikTok - Final</title>
+<title>Sorteo TikTok - Avanzado</title>
 
 <style>
 body {
@@ -89,7 +89,15 @@ button:hover {
   <input id="csvUrl" placeholder="Link CSV publicado">
   <button id="btnLoadCsv">Cargar CSV</button>
   <div id="csvStatus"></div>
-  <div>Válidos del mes: <span id="participantCount">0</span></div>
+  <div>Total participantes: <span id="participantCount">0</span></div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Opciones de sorteo</div>
+
+  <input id="spinCount" type="number" min="10" value="50" placeholder="Cantidad de giros antes de elegir">
+  <input id="winnerCount" type="number" min="1" value="1" placeholder="Cantidad de ganadores por ronda">
+
 </div>
 
 <div class="panel">
@@ -141,56 +149,14 @@ document.getElementById("bgColorPicker").addEventListener("input", e => {
 });
 
 /* ============================
-   PARSER CSV ROBUSTO
+   PARSER CSV SIMPLE
    ============================ */
 function parseCSV(text) {
-  const rows = [];
-  let current = "";
-  let row = [];
-  let insideQuotes = false;
-
-  for (let char of text) {
-    if (char === '"' && !insideQuotes) insideQuotes = true;
-    else if (char === '"' && insideQuotes) insideQuotes = false;
-    else if (char === ',' && !insideQuotes) {
-      row.push(current.trim());
-      current = "";
-    } else if (char === '\n') {
-      row.push(current.trim());
-      rows.push(row);
-      row = [];
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  if (current.length > 0) {
-    row.push(current.trim());
-    rows.push(row);
-  }
-
-  return rows;
+  return text.split(/\r?\n/).map(line => line.split(","));
 }
 
 /* ============================
-   CONVERTIR FECHA dd/mm/yyyy hh:mm:ss → ISO
-   ============================ */
-function convertirFecha(fechaTexto) {
-  // ejemplo: "14/09/2026 20:21:00"
-  const partes = fechaTexto.split(" ");
-  const fecha = partes[0].split("/");
-  const hora = partes[1] || "00:00:00";
-
-  const dia = fecha[0];
-  const mes = fecha[1];
-  const año = fecha[2];
-
-  return `${año}-${mes}-${dia}T${hora}`;
-}
-
-/* ============================
-   CARGAR CSV (CORREGIDO)
+   CARGAR CSV (solo nombre + TikTok)
    ============================ */
 async function cargarCSV() {
   const url = document.getElementById("csvUrl").value.trim();
@@ -206,29 +172,21 @@ async function cargarCSV() {
     const rows = parseCSV(text).filter(r => r.length > 1);
 
     participants = [];
-    const hoy = new Date();
-    const mes = hoy.getMonth();
-    const año = hoy.getFullYear();
 
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
-
-      const fechaISO = convertirFecha(cols[0] || "");
-      const fecha = new Date(fechaISO);
 
       const nombre = cols[1] || "";
       const tiktok = cols[2] || "";
 
       if (!nombre) continue;
 
-      if (!isNaN(fecha.getTime()) && fecha.getMonth() === mes && fecha.getFullYear() === año) {
-        participants.push(`${nombre} (@${tiktok})`);
-      }
+      participants.push(`${nombre} (@${tiktok})`);
     }
 
     uniqueParticipants = [...new Set(participants)];
     participantCount.textContent = uniqueParticipants.length;
-    csvStatus.textContent = "CSV actualizado. Participantes: " + uniqueParticipants.length;
+    csvStatus.textContent = "CSV cargado correctamente.";
 
     return true;
 
@@ -261,10 +219,13 @@ document.getElementById("btnLoadCsv").addEventListener("click", async () => {
 });
 
 /* ============================
-   SORTEO CON EXCLUSIÓN DE GANADORES
+   SORTEO AVANZADO
    ============================ */
 document.getElementById("btnStart").addEventListener("click", () => {
   detenerAutoCSV();
+
+  const giros = parseInt(document.getElementById("spinCount").value);
+  const cantidadGanadores = parseInt(document.getElementById("winnerCount").value);
 
   if (uniqueParticipants.length === 0) {
     drawName.textContent = "No quedan participantes.";
@@ -272,28 +233,48 @@ document.getElementById("btnStart").addEventListener("click", () => {
   }
 
   let index = 0;
+  let count = 0;
+
   const interval = setInterval(() => {
     drawName.textContent = uniqueParticipants[index];
     index = (index + 1) % uniqueParticipants.length;
-  }, 50);
+    count++;
 
-  setTimeout(() => {
-    clearInterval(interval);
+    if (count >= giros) {
+      clearInterval(interval);
+      elegirGanadores(cantidadGanadores);
+    }
+  }, 50);
+});
+
+/* ============================
+   ELEGIR VARIOS GANADORES
+   ============================ */
+function elegirGanadores(cantidad) {
+  const ganadoresRonda = [];
+
+  for (let i = 0; i < cantidad; i++) {
+    if (uniqueParticipants.length === 0) break;
 
     const ganadorIndex = Math.floor(Math.random() * uniqueParticipants.length);
     const ganador = uniqueParticipants[ganadorIndex];
-    drawName.textContent = ganador;
+
+    ganadoresRonda.push(ganador);
 
     winners.push(ganador);
-    const li = document.createElement("li");
-    li.textContent = ganador;
-    historyList.appendChild(li);
-
     uniqueParticipants.splice(ganadorIndex, 1);
-    participantCount.textContent = uniqueParticipants.length;
+  }
 
-  }, 3000);
-});
+  drawName.textContent = ganadoresRonda.join(" | ");
+
+  ganadoresRonda.forEach(g => {
+    const li = document.createElement("li");
+    li.textContent = g;
+    historyList.appendChild(li);
+  });
+
+  participantCount.textContent = uniqueParticipants.length;
+}
 
 /* ============================
    REINICIAR
@@ -322,7 +303,7 @@ document.getElementById("btnCertificate").addEventListener("click", () => {
     "CERTIFICADO DE GANADOR\n\n" +
     "Sorteo: " + nombreSorteo + "\n" +
     "Premio: " + premio + "\n" +
-    "Ganador: " + ganador + "\n" +
+    "Ganadores: " + ganador + "\n" +
     "Fecha: " + new Date().toLocaleString()
   );
 });
