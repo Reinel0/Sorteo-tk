@@ -174,20 +174,36 @@ function parseCSV(text) {
 }
 
 /* ============================
-   CARGAR CSV
+   CONVERTIR FECHA dd/mm/yyyy hh:mm:ss → ISO
+   ============================ */
+function convertirFecha(fechaTexto) {
+  // ejemplo: "14/09/2026 20:21:00"
+  const partes = fechaTexto.split(" ");
+  const fecha = partes[0].split("/");
+  const hora = partes[1] || "00:00:00";
+
+  const dia = fecha[0];
+  const mes = fecha[1];
+  const año = fecha[2];
+
+  return `${año}-${mes}-${dia}T${hora}`;
+}
+
+/* ============================
+   CARGAR CSV (CORREGIDO)
    ============================ */
 async function cargarCSV() {
   const url = document.getElementById("csvUrl").value.trim();
   if (!url) {
     csvStatus.textContent = "Ingresa un link CSV.";
-    return;
+    return false;
   }
 
   try {
     const res = await fetch(url);
     const text = await res.text();
 
-    const rows = parseCSV(text);
+    const rows = parseCSV(text).filter(r => r.length > 1);
 
     participants = [];
     const hoy = new Date();
@@ -197,25 +213,27 @@ async function cargarCSV() {
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
 
-      const fecha = new Date(cols[0]);
+      const fechaISO = convertirFecha(cols[0] || "");
+      const fecha = new Date(fechaISO);
+
       const nombre = cols[1] || "";
-      const tiktok = cols[3] || "";
+      const tiktok = cols[2] || "";
 
       if (!nombre) continue;
 
-      if (fecha.getMonth() === mes && fecha.getFullYear() === año) {
+      if (!isNaN(fecha.getTime()) && fecha.getMonth() === mes && fecha.getFullYear() === año) {
         participants.push(`${nombre} (@${tiktok})`);
       }
     }
 
     uniqueParticipants = [...new Set(participants)];
     participantCount.textContent = uniqueParticipants.length;
-    csvStatus.textContent = "CSV actualizado.";
+    csvStatus.textContent = "CSV actualizado. Participantes: " + uniqueParticipants.length;
 
     return true;
 
-  } catch {
-    csvStatus.textContent = "Error al cargar CSV.";
+  } catch (err) {
+    csvStatus.textContent = "Error al cargar CSV: " + err;
     return false;
   }
 }
@@ -231,8 +249,10 @@ function activarAutoCSV() {
 }
 
 function detenerAutoCSV() {
-  clearInterval(autoCSV);
-  autoCSV = null;
+  if (autoCSV !== null) {
+    clearInterval(autoCSV);
+    autoCSV = null;
+  }
 }
 
 document.getElementById("btnLoadCsv").addEventListener("click", async () => {
