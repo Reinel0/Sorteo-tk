@@ -3,19 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sorteo TikTok - Avanzado</title>
-
+<title>Sorteo TikTok / YouTube - Avanzado</title>
 <style>
 body {
   margin: 0;
   padding: 0;
-  background: #1a1a1a;
+  background-color: #1a1a1a;
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   font-family: Arial, sans-serif;
   color: #fff;
 }
-
 .panel {
   background: rgba(0,0,0,0.45);
   padding: 15px;
@@ -23,13 +22,11 @@ body {
   border-radius: 10px;
   backdrop-filter: blur(10px);
 }
-
 .panel-title {
   font-size: 1.2rem;
   font-weight: bold;
   margin-bottom: 10px;
 }
-
 input, button {
   width: 100%;
   padding: 10px;
@@ -37,38 +34,45 @@ input, button {
   border-radius: 6px;
   border: none;
 }
-
 button {
   background: #4CAF50;
   color: white;
   font-weight: bold;
 }
-
-button:hover {
-  background: #45a049;
-}
-
+button:hover { background: #45a049; }
 #drawName {
   font-size: 1.5rem;
   text-align: center;
   margin: 20px 0;
   font-weight: bold;
 }
-
-#historyList {
-  list-style: none;
-  padding: 0;
-}
-
+#historyList { list-style: none; padding: 0; }
 #historyList li {
   background: rgba(255,255,255,0.15);
   padding: 8px;
   margin-top: 5px;
   border-radius: 5px;
+  font-size: 0.9rem;
+  word-break: break-word;
 }
+#verifyBox {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-top: 8px;
+  word-break: break-all;
+}
+#logoPreview {
+  display: none;
+  max-width: 120px;
+  max-height: 120px;
+  margin: 10px auto 0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 5px;
+}
+.logo-wrap { text-align: center; }
 </style>
 </head>
-
 <body>
 
 <div class="panel">
@@ -79,9 +83,17 @@ button:hover {
 </div>
 
 <div class="panel">
+  <div class="panel-title">Logo</div>
+  <input type="file" id="logoInput" accept="image/*">
+  <div class="logo-wrap"><img id="logoPreview" alt="Logo"></div>
+  <button id="btnClearLogo">Quitar logo</button>
+</div>
+
+<div class="panel">
   <div class="panel-title">Fondo</div>
   <input type="color" id="bgColorPicker" value="#1a1a1a">
   <input type="file" id="bgLocalImage" accept="image/*">
+  <button id="btnClearBg">Quitar imagen de fondo</button>
 </div>
 
 <div class="panel">
@@ -90,14 +102,13 @@ button:hover {
   <button id="btnLoadCsv">Cargar CSV</button>
   <div id="csvStatus"></div>
   <div>Total participantes: <span id="participantCount">0</span></div>
+  <div id="verifyBox"></div>
 </div>
 
 <div class="panel">
   <div class="panel-title">Opciones de sorteo</div>
-
   <input id="spinCount" type="number" min="10" value="50" placeholder="Cantidad de giros antes de elegir">
   <input id="winnerCount" type="number" min="1" value="1" placeholder="Cantidad de ganadores por ronda">
-
 </div>
 
 <div class="panel">
@@ -105,101 +116,126 @@ button:hover {
   <div id="drawName">Listo para iniciar</div>
   <button id="btnStart">Iniciar sorteo</button>
   <button id="btnReset">Reiniciar</button>
-
   <div class="panel-title">Ganadores</div>
   <ul id="historyList"></ul>
-
-  <button id="btnCertificate">Certificado</button>
+  <button id="btnCertificate">Certificado PDF</button>
 </div>
 
 <script>
 let participants = [];
 let uniqueParticipants = [];
 let winners = [];
+let winnersAudit = [];
 let autoCSV = null;
+let lastHash = "INICIO";
+let participantsHash = "";
+let initialParticipantCount = 0;
+let logoData = null;
 
-/* ============================
-   HORA EN TIEMPO REAL
-   ============================ */
+const $ = id => document.getElementById(id);
+const csvStatus = $("csvStatus");
+const participantCount = $("participantCount");
+const drawName = $("drawName");
+const historyList = $("historyList");
+const verifyBox = $("verifyBox");
+
 function actualizarHora() {
-  document.getElementById("dateTimeInfo").textContent =
-    "Fecha y hora: " + new Date().toLocaleString();
+  $("dateTimeInfo").textContent = "Fecha y hora: " + new Date().toLocaleString();
 }
 setInterval(actualizarHora, 1000);
 actualizarHora();
 
-/* ============================
-   FONDO LOCAL
-   ============================ */
-document.getElementById("bgLocalImage").addEventListener("change", e => {
+$("logoInput").addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    document.body.style.backgroundImage = `url("${ev.target.result}")`;
+    logoData = ev.target.result;
+    const img = $("logoPreview");
+    img.src = logoData;
+    img.style.display = "block";
   };
   reader.readAsDataURL(file);
 });
 
-/* ============================
-   FONDO POR COLOR
-   ============================ */
-document.getElementById("bgColorPicker").addEventListener("input", e => {
-  document.body.style.background = e.target.value;
+$("btnClearLogo").addEventListener("click", () => {
+  logoData = null;
+  $("logoInput").value = "";
+  $("logoPreview").style.display = "none";
+  $("logoPreview").src = "";
 });
 
-/* ============================
-   PARSER CSV SIMPLE
-   ============================ */
+let bgColor = "#1a1a1a";
+let bgImageData = null;
+
+function aplicarFondo() {
+  document.body.style.backgroundColor = bgColor;
+  if (bgImageData) {
+    document.body.style.backgroundImage = `url("${bgImageData}")`;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundRepeat = "no-repeat";
+  } else {
+    document.body.style.backgroundImage = "none";
+  }
+}
+
+$("bgLocalImage").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { bgImageData = ev.target.result; aplicarFondo(); };
+  reader.readAsDataURL(file);
+});
+
+$("bgColorPicker").addEventListener("input", e => { bgColor = e.target.value; aplicarFondo(); });
+
+$("btnClearBg").addEventListener("click", () => {
+  bgImageData = null;
+  $("bgLocalImage").value = "";
+  aplicarFondo();
+});
+aplicarFondo();
+
 function parseCSV(text) {
   return text.split(/\r?\n/).map(line => line.split(","));
 }
 
-/* ============================
-   CARGAR CSV (solo nombre + TikTok)
-   ============================ */
-async function cargarCSV() {
-  const url = document.getElementById("csvUrl").value.trim();
-  if (!url) {
-    csvStatus.textContent = "Ingresa un link CSV.";
-    return false;
-  }
+async function sha256Hex(texto) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
+async function cargarCSV() {
+  const url = $("csvUrl").value.trim();
+  if (!url) { csvStatus.textContent = "Ingresa un link CSV."; return false; }
   try {
     const res = await fetch(url);
     const text = await res.text();
-
     const rows = parseCSV(text).filter(r => r.length > 1);
-
     participants = [];
-
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
-
-      const nombre = cols[1] || "";
-      const tiktok = cols[2] || "";
-
+      const nombre = (cols[1] || "").trim();
+      const tiktok = (cols[2] || "").trim();
       if (!nombre) continue;
-
       participants.push(`${nombre} (@${tiktok})`);
     }
-
     uniqueParticipants = [...new Set(participants)];
+    if (initialParticipantCount === 0) initialParticipantCount = uniqueParticipants.length;
     participantCount.textContent = uniqueParticipants.length;
+    participantsHash = await sha256Hex(uniqueParticipants.join("|"));
     csvStatus.textContent = "CSV cargado correctamente.";
-
+    verifyBox.textContent = "Hash lista: " + participantsHash.slice(0, 16) + "...";
     return true;
-
   } catch (err) {
     csvStatus.textContent = "Error al cargar CSV: " + err;
     return false;
   }
 }
 
-/* ============================
-   AUTO-UPDATE CSV
-   ============================ */
 function activarAutoCSV() {
+  if (autoCSV) return;
   autoCSV = setInterval(async () => {
     const ok = await cargarCSV();
     if (!ok) detenerAutoCSV();
@@ -207,39 +243,36 @@ function activarAutoCSV() {
 }
 
 function detenerAutoCSV() {
-  if (autoCSV !== null) {
-    clearInterval(autoCSV);
-    autoCSV = null;
-  }
+  if (autoCSV !== null) { clearInterval(autoCSV); autoCSV = null; }
 }
 
-document.getElementById("btnLoadCsv").addEventListener("click", async () => {
+$("btnLoadCsv").addEventListener("click", async () => {
   const ok = await cargarCSV();
   if (ok) activarAutoCSV();
 });
 
-/* ============================
-   SORTEO AVANZADO
-   ============================ */
-document.getElementById("btnStart").addEventListener("click", () => {
+function secureRandomInt(max) {
+  if (max <= 0) throw new Error("max debe ser mayor a 0");
+  const limit = Math.floor(4294967296 / max) * max;
+  const arr = new Uint32Array(1);
+  while (true) {
+    crypto.getRandomValues(arr);
+    if (arr[0] < limit) return arr[0] % max;
+  }
+}
+
+$("btnStart").addEventListener("click", () => {
   detenerAutoCSV();
-
-  const giros = parseInt(document.getElementById("spinCount").value);
-  const cantidadGanadores = parseInt(document.getElementById("winnerCount").value);
-
+  const giros = parseInt($("spinCount").value) || 50;
+  const cantidadGanadores = parseInt($("winnerCount").value) || 1;
   if (uniqueParticipants.length === 0) {
     drawName.textContent = "No quedan participantes.";
     return;
   }
-
-  let index = 0;
   let count = 0;
-
   const interval = setInterval(() => {
-    drawName.textContent = uniqueParticipants[index];
-    index = (index + 1) % uniqueParticipants.length;
+    drawName.textContent = uniqueParticipants[secureRandomInt(uniqueParticipants.length)];
     count++;
-
     if (count >= giros) {
       clearInterval(interval);
       elegirGanadores(cantidadGanadores);
@@ -247,67 +280,117 @@ document.getElementById("btnStart").addEventListener("click", () => {
   }, 50);
 });
 
-/* ============================
-   ELEGIR VARIOS GANADORES
-   ============================ */
-function elegirGanadores(cantidad) {
+async function elegirGanadores(cantidad) {
   const ganadoresRonda = [];
-
   for (let i = 0; i < cantidad; i++) {
     if (uniqueParticipants.length === 0) break;
-
-    const ganadorIndex = Math.floor(Math.random() * uniqueParticipants.length);
+    const ganadorIndex = secureRandomInt(uniqueParticipants.length);
     const ganador = uniqueParticipants[ganadorIndex];
-
+    const fecha = new Date().toLocaleString();
+    const nuevoHash = await sha256Hex(lastHash + "|" + ganador + "|" + fecha);
+    lastHash = nuevoHash;
     ganadoresRonda.push(ganador);
-
     winners.push(ganador);
+    winnersAudit.push({ nombre: ganador, fecha, hash: nuevoHash });
     uniqueParticipants.splice(ganadorIndex, 1);
-  }
-
-  drawName.textContent = ganadoresRonda.join(" | ");
-
-  ganadoresRonda.forEach(g => {
     const li = document.createElement("li");
-    li.textContent = g;
+    li.textContent = ganador + " - " + fecha + " - Verif: " + nuevoHash.slice(0, 10);
     historyList.appendChild(li);
-  });
-
+  }
+  drawName.textContent = ganadoresRonda.join(" | ");
   participantCount.textContent = uniqueParticipants.length;
+  verifyBox.textContent = "Hash final verificación: " + lastHash.slice(0, 16) + "... | Hash lista inicial: " + participantsHash.slice(0, 16);
 }
 
-/* ============================
-   REINICIAR
-   ============================ */
-document.getElementById("btnReset").addEventListener("click", () => {
+$("btnReset").addEventListener("click", async () => {
   winners = [];
+  winnersAudit = [];
+  lastHash = "INICIO";
   historyList.innerHTML = "";
   drawName.textContent = "Listo para iniciar";
+  await cargarCSV();
   activarAutoCSV();
 });
 
-/* ============================
-   CERTIFICADO
-   ============================ */
-document.getElementById("btnCertificate").addEventListener("click", () => {
-  const ganador = drawName.textContent;
-  if (!ganador || ganador === "Listo para iniciar") {
-    alert("No hay ganador aún.");
+$("btnCertificate").addEventListener("click", () => {
+  if (winners.length === 0) {
+    alert("No hay ganadores aún.");
     return;
   }
+  const nombreSorteo = $("raffleName").value || "Sorteo TikTok";
+  const premio = $("raffleItem").value || "Premio";
+  const fechaCert = new Date().toLocaleString();
+  const girosCfg = $("spinCount").value || "50";
+  const ganadoresPorRonda = $("winnerCount").value || "1";
+  const csvLink = $("csvUrl").value || "No registrado";
+  const totalInicial = initialParticipantCount || (winners.length + uniqueParticipants.length);
+  const restantes = uniqueParticipants.length;
 
-  const nombreSorteo = document.getElementById("raffleName").value || "Sorteo TikTok";
-  const premio = document.getElementById("raffleItem").value || "Premio";
+  const logoHtml = logoData
+    ? `<img src="${logoData}" style="max-width:140px; max-height:140px; object-fit:contain; margin:0 auto 10px; display:block;">`
+    : `<span style="font-size:32px;">🏆</span>`;
 
-  alert(
-    "CERTIFICADO DE GANADOR\n\n" +
-    "Sorteo: " + nombreSorteo + "\n" +
-    "Premio: " + premio + "\n" +
-    "Ganadores: " + ganador + "\n" +
-    "Fecha: " + new Date().toLocaleString()
-  );
+  const filas = winnersAudit.map((g, i) => `
+    <tr>
+      <td style="padding:10px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${i + 1}</td>
+      <td style="padding:10px; border-bottom:1px solid #eee;">${g.nombre}</td>
+      <td style="padding:10px; border-bottom:1px solid #eee; font-size:12px;">${g.fecha}</td>
+      <td style="padding:10px; border-bottom:1px solid #eee; font-family:monospace; font-size:11px;">${g.hash.slice(0, 12)}</td>
+    </tr>
+  `).join("");
+
+  const htmlCert = `
+  <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Certificado - ${nombreSorteo}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 30px; background: #fff; color: #111; }
+    .cert { max-width: 780px; margin: auto; border: 4px double #111; border-radius: 16px; padding: 30px 35px; }
+    .top { text-align: center; }
+    h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: 1px; }
+    .sub { color: #555; margin-top: 4px; }
+    .box { background: #f7f7f7; border-radius: 10px; padding: 15px; margin: 18px 0; text-align: center; }
+    .box b { font-size: 20px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; font-size: 13px; margin-top: 12px; }
+    .info-grid div { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #111; color: #fff; padding: 10px; font-size: 13px; }
+    .hash { font-size: 11px; word-break: break-all; background: #f7f7f7; padding: 10px; border-radius: 8px; font-family: monospace; margin-top: 15px; }
+    .firmas { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
+    .firma { border-top: 1px solid #111; width: 40%; padding-top: 6px; font-size: 13px; }
+    .footer { text-align: center; font-size: 11px; color: #777; margin-top: 20px; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+  </style></head>
+  <body>
+    <div class="cert">
+      <div class="top">${logoHtml}<h1>CERTIFICADO DE GANADORES</h1><div class="sub">Sorteo verificado - TikTok</div></div>
+      <div class="box">
+        <div style="font-size:13px; color:#555;">SORTEO</div><b>${nombreSorteo}</b><br><br>
+        <div style="font-size:13px; color:#555;">PREMIO</div><b>${premio}</b><br>
+        <div class="info-grid">
+          <div><b>Fecha de emisión:</b><br>${fechaCert}</div>
+          <div><b>Total ganadores:</b><br>${winners.length}</div>
+          <div><b>Participantes iniciales:</b><br>${totalInicial}</div>
+          <div><b>Participantes restantes:</b><br>${restantes}</div>
+          <div><b>Giros configurados:</b><br>${girosCfg}</div>
+          <div><b>Ganadores por ronda:</b><br>${ganadoresPorRonda}</div>
+          <div style="grid-column: span 2;"><b>Fuente de participantes (CSV):</b><br><span style="word-break:break-all;">${csvLink}</span></div>
+        </div>
+      </div>
+      <h3 style="margin:15px 0 0;">Ganadores</h3>
+      <table><thead><tr><th>#</th><th>GANADOR</th><th>FECHA SORTEO</th><th>VERIF.</th></tr></thead><tbody>${filas}</tbody></table>
+      <div class="hash"><b>Hash final de verificación:</b><br>${lastHash}<br><br><b>Hash lista participantes:</b><br>${participantsHash}</div>
+      <div class="firmas"><div class="firma">Organizador<br>${nombreSorteo}</div><div class="firma">Testigo / Ángela</div></div>
+      <div class="footer">Este certificado fue generado desde la página del sorteo. Los códigos de verificación permiten comprobar que la lista no fue alterada después del sorteo.</div>
+      <div class="no-print" style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; font-size:16px; cursor:pointer;">Imprimir / Guardar como PDF</button></div>
+    </div>
+    <script>window.onload = () => setTimeout(() => window.print(), 400);<\/script>
+  </body></html>
+  `;
+
+  const win = window.open("", "_blank");
+  if (!win) { alert("Permite las ventanas emergentes para ver el certificado."); return; }
+  win.document.write(htmlCert);
+  win.document.close();
 });
 </script>
-
 </body>
 </html>
