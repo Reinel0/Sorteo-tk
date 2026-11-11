@@ -2,9 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sorteo TikTok / YouTube - Avanzado</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Sorteo Bolsa de papel T-Y</title>
 <style>
+* { box-sizing: border-box; }
+html, body { width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   padding: 0;
@@ -15,12 +17,26 @@ body {
   font-family: Arial, sans-serif;
   color: #fff;
 }
+.main {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 6px 0 20px;
+}
+.top-title {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin: 14px 12px 4px;
+  line-height: 1.2;
+}
 .panel {
   background: rgba(0,0,0,0.45);
   padding: 15px;
   margin: 12px;
   border-radius: 10px;
   backdrop-filter: blur(10px);
+  width: calc(100% - 24px);
 }
 .panel-title {
   font-size: 1.2rem;
@@ -29,22 +45,35 @@ body {
 }
 input, button {
   width: 100%;
-  padding: 10px;
+  padding: 12px 10px;
   margin-top: 8px;
   border-radius: 6px;
   border: none;
+  font-size: 16px;
+  min-height: 44px;
 }
+input[type="file"] {
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  padding: 10px;
+}
+input[type="color"] { padding: 4px; height: 48px; }
 button {
   background: #4CAF50;
   color: white;
   font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 button:hover { background: #45a049; }
+button:active { transform: scale(0.98); }
 #drawName {
   font-size: 1.5rem;
   text-align: center;
   margin: 20px 0;
   font-weight: bold;
+  word-break: break-word;
 }
 #historyList { list-style: none; padding: 0; }
 #historyList li {
@@ -65,19 +94,34 @@ button:hover { background: #45a049; }
   display: none;
   max-width: 120px;
   max-height: 120px;
+  width: auto;
+  height: auto;
   margin: 10px auto 0;
   border-radius: 10px;
   background: #fff;
   padding: 5px;
 }
 .logo-wrap { text-align: center; }
+@media (max-width: 600px) {
+  .panel { padding: 12px; margin: 10px 8px; width: calc(100% - 16px); }
+  .top-title { font-size: 1.25rem; margin: 12px 8px 2px; }
+  #drawName { font-size: 1.25rem; }
+  #logoPreview { max-width: 100px; max-height: 100px; }
+  input, button { font-size: 16px; }
+}
+@media (max-width: 360px) {
+  .panel-title { font-size: 1.05rem; }
+  #drawName { font-size: 1.1rem; }
+}
 </style>
 </head>
 <body>
+<div class="main">
+<div class="top-title">Sorteo Bolsa de papel T-Y</div>
 
 <div class="panel">
   <div class="panel-title">Datos del sorteo</div>
-  <input id="raffleName" placeholder="Nombre del sorteo">
+  <input id="raffleName" placeholder="Nombre del sorteo" value="Sorteo Bolsa de papel T-Y">
   <input id="raffleItem" placeholder="Qué se está sorteando">
   <div id="dateTimeInfo"></div>
 </div>
@@ -119,6 +163,7 @@ button:hover { background: #45a049; }
   <div class="panel-title">Ganadores</div>
   <ul id="historyList"></ul>
   <button id="btnCertificate">Certificado PDF</button>
+</div>
 </div>
 
 <script>
@@ -317,7 +362,7 @@ $("btnCertificate").addEventListener("click", () => {
     alert("No hay ganadores aún.");
     return;
   }
-  const nombreSorteo = $("raffleName").value || "Sorteo TikTok";
+  const nombreSorteo = $("raffleName").value || "Sorteo Bolsa de papel T-Y";
   const premio = $("raffleItem").value || "Premio";
   const fechaCert = new Date().toLocaleString();
   const girosCfg = $("spinCount").value || "50";
@@ -327,44 +372,47 @@ $("btnCertificate").addEventListener("click", () => {
   const restantes = uniqueParticipants.length;
 
   const logoHtml = logoData
-    ? `<img src="${logoData}" style="max-width:140px; max-height:140px; object-fit:contain; margin:0 auto 10px; display:block;">`
+    ? `<img src="${logoData}" style="max-width:130px; max-height:110px; object-fit:contain; margin:0 auto 8px; display:block;">`
     : `<span style="font-size:32px;">🏆</span>`;
 
   const filas = winnersAudit.map((g, i) => `
     <tr>
-      <td style="padding:10px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${i + 1}</td>
-      <td style="padding:10px; border-bottom:1px solid #eee;">${g.nombre}</td>
-      <td style="padding:10px; border-bottom:1px solid #eee; font-size:12px;">${g.fecha}</td>
-      <td style="padding:10px; border-bottom:1px solid #eee; font-family:monospace; font-size:11px;">${g.hash.slice(0, 12)}</td>
+      <td style="padding:8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${i + 1}</td>
+      <td style="padding:8px; border-bottom:1px solid #eee;">${g.nombre}</td>
+      <td style="padding:8px; border-bottom:1px solid #eee; font-size:11px;">${g.fecha}</td>
+      <td style="padding:8px; border-bottom:1px solid #eee; font-family:monospace; font-size:10px;">${g.hash.slice(0, 12)}</td>
     </tr>
   `).join("");
 
   const htmlCert = `
   <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Certificado - ${nombreSorteo}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 30px; background: #fff; color: #111; }
-    .cert { max-width: 780px; margin: auto; border: 4px double #111; border-radius: 16px; padding: 30px 35px; }
+    @page { size: Letter; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+    .cert { width: 100%; max-width: 7.5in; margin: 0 auto; border: 4px double #111; border-radius: 14px; padding: 22px 26px; }
     .top { text-align: center; }
-    h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: 1px; }
-    .sub { color: #555; margin-top: 4px; }
-    .box { background: #f7f7f7; border-radius: 10px; padding: 15px; margin: 18px 0; text-align: center; }
-    .box b { font-size: 20px; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; font-size: 13px; margin-top: 12px; }
-    .info-grid div { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th { background: #111; color: #fff; padding: 10px; font-size: 13px; }
-    .hash { font-size: 11px; word-break: break-all; background: #f7f7f7; padding: 10px; border-radius: 8px; font-family: monospace; margin-top: 15px; }
-    .firmas { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
-    .firma { border-top: 1px solid #111; width: 40%; padding-top: 6px; font-size: 13px; }
-    .footer { text-align: center; font-size: 11px; color: #777; margin-top: 20px; }
-    @media print { body { padding: 0; } .no-print { display: none; } }
+    h1 { margin: 5px 0 0; font-size: 26px; letter-spacing: 1px; }
+    .sub { color: #555; margin-top: 4px; font-size: 13px; }
+    .box { background: #f7f7f7; border-radius: 10px; padding: 14px; margin: 14px 0; text-align: center; }
+    .box b { font-size: 19px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; font-size: 12px; margin-top: 10px; }
+    .info-grid div { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #111; color: #fff; padding: 8px; font-size: 12px; }
+    td { font-size: 13px; }
+    .hash { font-size: 10px; word-break: break-all; background: #f7f7f7; padding: 8px; border-radius: 8px; font-family: monospace; margin-top: 12px; }
+    .firmas { display: flex; justify-content: space-between; margin-top: 28px; text-align: center; }
+    .firma { border-top: 1px solid #111; width: 40%; padding-top: 6px; font-size: 12px; }
+    .footer { text-align: center; font-size: 10px; color: #777; margin-top: 14px; }
+    @media print { body { padding: 0; } .no-print { display: none; } .cert { border: 4px double #111; } }
   </style></head>
   <body>
     <div class="cert">
       <div class="top">${logoHtml}<h1>CERTIFICADO DE GANADORES</h1><div class="sub">Sorteo verificado - TikTok</div></div>
       <div class="box">
-        <div style="font-size:13px; color:#555;">SORTEO</div><b>${nombreSorteo}</b><br><br>
-        <div style="font-size:13px; color:#555;">PREMIO</div><b>${premio}</b><br>
+        <div style="font-size:12px; color:#555;">SORTEO</div><b>${nombreSorteo}</b><br><br>
+        <div style="font-size:12px; color:#555;">PREMIO</div><b>${premio}</b><br>
         <div class="info-grid">
           <div><b>Fecha de emisión:</b><br>${fechaCert}</div>
           <div><b>Total ganadores:</b><br>${winners.length}</div>
@@ -375,12 +423,12 @@ $("btnCertificate").addEventListener("click", () => {
           <div style="grid-column: span 2;"><b>Fuente de participantes (CSV):</b><br><span style="word-break:break-all;">${csvLink}</span></div>
         </div>
       </div>
-      <h3 style="margin:15px 0 0;">Ganadores</h3>
+      <h3 style="margin:12px 0 0; font-size:15px;">Ganadores</h3>
       <table><thead><tr><th>#</th><th>GANADOR</th><th>FECHA SORTEO</th><th>VERIF.</th></tr></thead><tbody>${filas}</tbody></table>
       <div class="hash"><b>Hash final de verificación:</b><br>${lastHash}<br><br><b>Hash lista participantes:</b><br>${participantsHash}</div>
       <div class="firmas"><div class="firma">Organizador<br>${nombreSorteo}</div><div class="firma">Testigo / Ángela</div></div>
       <div class="footer">Este certificado fue generado desde la página del sorteo. Los códigos de verificación permiten comprobar que la lista no fue alterada después del sorteo.</div>
-      <div class="no-print" style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; font-size:16px; cursor:pointer;">Imprimir / Guardar como PDF</button></div>
+      <div class="no-print" style="text-align:center; margin-top:16px;"><button onclick="window.print()" style="padding:10px 20px; font-size:16px; cursor:pointer;">Imprimir / Guardar como PDF</button></div>
     </div>
     <script>window.onload = () => setTimeout(() => window.print(), 400);<\/script>
   </body></html>
